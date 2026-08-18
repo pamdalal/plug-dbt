@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plug dbt on Snowflake"
+  short_description: "Build reliable Snowflake models in plug-dbt"
+  default_prompt: "Use $using-plug-dbt-on-snowflake to build and validate a scoped Snowflake dbt model in this repository."
