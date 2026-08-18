@@ -2,3 +2,11 @@
 .env
 .env.*
 !.env.example
+
+# dbt artifacts and local configuration
+target/
+dbt_packages/
+logs/
+profiles.yml
+.user.yml
+dbt_internal_packages/
