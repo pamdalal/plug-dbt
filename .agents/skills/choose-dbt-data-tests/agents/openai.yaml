@@ -1,0 +1,4 @@
+interface:
+  display_name: "Choose dbt Data Tests"
+  short_description: "Select the simplest maintainable dbt data test"
+  default_prompt: "Use $choose-dbt-data-tests to choose and implement the right tests for this model."

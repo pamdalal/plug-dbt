@@ -36,10 +36,13 @@ Use bounded, cost-conscious dbt queries against a confirmed development target. 
 
 - Every `models/staging/*.sql` model must use dbt incremental materialization and include an `{% if is_incremental() %}` branch that limits source processing.
 - An incremental branch in a model still configured as a view is not sufficient. Add a model-level incremental configuration or update the applicable project configuration as part of the model change.
-- Base the incremental boundary on a reliable source update or ingestion field. Document the chosen watermark in the paired YAML file.
-- Preserve the declared grain across both full-refresh and incremental paths. Handle equal watermarks, repeated deliveries, updates, and late-arriving records explicitly so reruns are idempotent.
-- Configure a `unique_key` and incremental strategy when the model's grain supports updates or replay. Do not invent a key, ordering rule, or deduplication policy from filenames or a small sample.
-- If no reliable watermark or replay-safe strategy exists, stop and ask for the intended ingestion semantics rather than adding unsafe incremental logic.
+- Preserve the raw physical delivery grain and source evidence. Do not deduplicate, select a canonical record, or collapse repeated business identifiers in staging.
+- Identify an existing unique, non-null key for the physical delivery grain. If no single source column qualifies, create a deterministic surrogate key from fields that establish that grain.
+- Apply `unique` and `not_null` tests to the staging delivery key, but never configure that key as a merge key or use it to deduplicate records.
+- Base the incremental boundary on a reliable source ingestion or load timestamp. Append only rows whose watermark is strictly greater than the maximum watermark already present in the target, and document the boundary in the paired YAML file.
+- Do not configure `unique_key` or a merge-based incremental strategy for staging models. Repeated deliveries, updates, equal watermarks, and late-arriving records must remain source evidence rather than being replayed or reconciled in staging.
+- Add a reverse source-to-staging completeness test that fails when any source delivery key is absent from staging. Use that test to expose records skipped because their watermark is equal to or earlier than the current maximum.
+- If no reliable ingestion watermark or deterministic physical-delivery key exists, stop and ask for the intended ingestion semantics rather than adding unsafe incremental logic.
 - Never run `--full-refresh` without explicit user approval.
 
 ## Definition of done for model changes

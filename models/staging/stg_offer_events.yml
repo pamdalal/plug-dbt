@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: stg_offer_events
+    description: >
+      Preserves one row per physical source delivery, keyed by source_record_id,
+      from raw_offer_events. The model appends only rows whose ingested_at is
+      strictly greater than the maximum watermark already loaded; equal or
+      backdated deliveries remain visible as completeness-test failures rather
+      than being merged or deduplicated. Raw mixed amount units are retained,
+      with offer_amount_dollars added as a nullable normalization that divides
+      cents by 100, preserves dollars, and returns null for unsupported units.
+    columns:
+      - name: currency_code
+        description: Currency associated with the raw offer amount; normalization does not convert currencies.
+      - name: event_at
+        description: Source-provided timestamp for when the claimed offer lifecycle event occurred.
+      - name: event_sequence
+        description: Source-provided sequence of the event within an offer lifecycle, which may repeat across offers.
+      - name: event_type
+        description: Source lifecycle classification such as issued, revised, accepted, declined, expired, or withdrawn.
+      - name: expires_at
+        description: Source-provided offer expiration timestamp retained across lifecycle events.
+      - name: ingested_at
+        description: Authoritative source loading timestamp used as the strict append-only incremental watermark.
+        tests:
+          - not_null
+      - name: offer_amount
+        description: Raw fixed-point amount at the loaded seed boundary, interpreted using offer_amount_unit and nullable for events without an amount.
+      - name: offer_amount_dollars
+        description: Dollar-denominated number(38,2) derived from supported dollars or cents units; null raw amounts and unsupported units remain null.
+      - name: offer_amount_unit
+        description: Raw unit identifying whether offer_amount is expressed in dollars or cents.
+      - name: offer_id
+        description: Source identifier for the offer, repeated across valid lifecycle events and physical deliveries.
+      - name: offer_version
+        description: Source-provided offer revision number, which may repeat across different offers and event types.
+      - name: reason_code
+        description: Nullable source lifecycle reason populated only when an event has an applicable explanation.
+      - name: request_id
+        description: Source identifier linking the offer event to its valuation request; repeated deliveries are valid.
+      - name: schema_version
+        description: Version of the source payload schema represented by the physical delivery.
+      - name: source_batch_id
+        description: Identifier for the source delivery batch used for provenance and replay analysis.
+      - name: source_event_id
+        description: Claimed immutable event identifier that can repeat across separate physical source deliveries.
+      - name: source_record_id
+        description: Durable unique, non-null identifier for one physical source-delivery row; it is not used to merge or deduplicate records.
+        tests:
+          - not_null
+          - unique
+      - name: source_system
+        description: System that produced the delivered offer event record.
+      - name: source_updated_at
+        description: Source-system timestamp for the latest update represented by the delivered event payload.
