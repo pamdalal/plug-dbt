@@ -1,7 +1,8 @@
 {{
     config(
         materialized='incremental',
-        incremental_strategy='append'
+        incremental_strategy='append',
+        on_schema_change='append_new_columns'
     )
 }}
 
@@ -37,6 +38,15 @@ normalized as (
         currency_code,
         expires_at,
         reason_code,
+        md5(
+            to_json(
+                array_construct(
+                    'offer_event',
+                    source_system,
+                    source_record_id
+                )
+            )
+        ) as offer_event_sk,
         cast(
             case
                 when offer_amount_unit = 'dollars' then offer_amount
@@ -49,6 +59,7 @@ normalized as (
 )
 
 select
+    offer_event_sk,
     source_record_id,
     source_event_id,
     offer_id,

@@ -28,7 +28,8 @@ Then add applicable column tests to the model's YAML file:
 - Add `unique` only when the column is a logical key at the declared grain and the scan finds no duplicates. Observed uniqueness alone does not establish a durable key.
 - Add `accepted_values` only for a stable, enumerable domain supported by both the observed values and an established business or source contract. Do not turn incidental sample values into a permanent contract.
 - Add range tests only when a defensible lower or upper bound exists. State the bound and whether it is inclusive. Use a project-supported generic range test; if none exists, add a project-local generic test or ask before introducing a package dependency.
-- Keep tests high-signal. Every column must be documented and profiled, but do not invent a test for a column that has no stable invariant.
+- Every output column must have at least one meaningful, contract-backed data test in the paired YAML file. If no stable invariant can be established, report the model as blocked rather than omitting the test or inventing one.
+- Keep tests high-signal. Do not add redundant tests that restate an invariant already covered clearly.
 
 Use bounded, cost-conscious dbt queries against a confirmed development target. If the data cannot be scanned because credentials, the warehouse, or an upstream relation is unavailable, report the profiling and test selection as blocked; do not guess and do not claim the model is complete.
 

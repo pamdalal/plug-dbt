@@ -46,7 +46,7 @@ Apply software-engineering discipline through dbt: preserve raw evidence, declar
 - Use tolerant `try_to_*` conversion only with an accompanying quality check that makes conversion failures visible. Never turn malformed evidence into silent nulls.
 - Keep unquoted, snake_case identifiers unless the project deliberately adopts quoted identifiers.
 - Retain the staging `view` default. Ask before introducing tables, incremental models, clustering, transient objects, or other Snowflake-specific materializations.
-- Add only high-signal tests: key `not_null`/`unique`, justified relationships, observed accepted values, or critical cross-column invariants. Do not delete or weaken a failing test merely to make a build pass.
+- Add at least one meaningful, contract-backed data test for every output column in the paired YAML file. Use key `not_null`/`unique`, justified relationships, contract-backed accepted values, ranges, or cross-column invariants as applicable. If no stable invariant can be established, report the model as blocked rather than omitting the test or inventing one. Do not delete or weaken a failing test merely to make a build pass.
 - Document why a model exists, its grain, important transformations, and edge cases. Do not restate names as descriptions.
 
 ## Validate with the smallest sufficient scope

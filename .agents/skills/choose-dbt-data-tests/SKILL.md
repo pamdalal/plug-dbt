@@ -16,10 +16,12 @@ Apply the repository `AGENTS.md` and the `using-plug-dbt-on-snowflake` skill fir
 ## Establish the assertion
 
 1. Read the model SQL, its same-named YAML file, its upstream inputs, and relevant downstream contracts.
-2. State the invariant and the rows that should make it fail.
-3. Profile the relevant data in the confirmed development target as required by `AGENTS.md`.
-4. Require both observed evidence and a durable source or business contract. Do not convert an accidental property of the current sample into a test.
-5. Choose exactly one implementation using the ranking below. Do not duplicate the same assertion at multiple ranks.
+2. Inventory every column emitted by the model's final `select`.
+3. For every output column, state at least one meaningful invariant and the rows that should make it fail.
+4. Profile every output column in the confirmed development target as required by `AGENTS.md`.
+5. Require both observed evidence and a durable source or business contract. Do not convert an accidental property of the current sample into a test.
+6. Add at least one meaningful, contract-backed data test for every output column to the paired YAML file. If no stable invariant can be established, report the model as blocked rather than omitting the test or inventing one.
+7. Choose exactly one implementation for each assertion using the ranking below. Do not duplicate the same assertion at multiple ranks.
 
 ## Rank 1: use native dbt generic tests in model YAML
 
@@ -60,7 +62,7 @@ For each singular test:
 - Do not list the singular test in model YAML; dbt discovers it from `test-paths`.
 - Avoid duplicating a reusable generic pattern across several SQL files. If repetition emerges, stop and propose a reusable generic test separately.
 
-Do not replace a clear YAML generic test with singular SQL merely to avoid checking or installing an approved dependency.
+Do not replace a clear YAML generic test with singular SQL merely to avoid checking or installing an approved dependency. Singular tests may supplement model coverage, but they do not satisfy the required paired-YAML test coverage for any output column.
 
 ## Common choices
 
@@ -81,7 +83,8 @@ Do not replace a clear YAML generic test with singular SQL merely to avoid check
 
 ## Validate the choice
 
-1. Run `dbt parse` after YAML, package, or Jinja changes.
-2. Run the smallest scoped `dbt test` or `dbt build` selector that executes the changed model and test.
-3. Inspect compiled SQL and failure rows when a test fails.
-4. Report package installation, warehouse execution, or profiling as blocked when prerequisites are unavailable; do not claim unrun tests passed.
+1. Reconcile the final-select column inventory against the paired YAML and confirm that every output column has at least one meaningful, contract-backed data test.
+2. Run `dbt parse` after YAML, package, or Jinja changes.
+3. Run the smallest scoped `dbt test` or `dbt build` selector that executes the changed model and test.
+4. Inspect compiled SQL and failure rows when a test fails.
+5. Report missing column contracts, package installation, warehouse execution, or profiling as blocked when prerequisites are unavailable; do not claim the model or unrun tests passed.
