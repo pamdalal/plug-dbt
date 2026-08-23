@@ -10,3 +10,7 @@ logs/
 profiles.yml
 .user.yml
 dbt_internal_packages/
+
+# Local planning and prompt artifacts
+docs/plans/
+prompt-exports/
