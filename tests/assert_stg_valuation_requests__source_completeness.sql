@@ -1,0 +1,31 @@
+with source_deliveries as (
+
+    select
+        source_record_id
+        , source_batch_id
+        , ingested_at
+    from
+        {{ ref('raw_valuation_requests') }}
+
+)
+
+, staged_deliveries as (
+
+    select
+        source_record_id
+    from
+        {{ ref('stg_valuation_requests') }}
+
+)
+
+select
+    source_deliveries.source_record_id
+    , source_deliveries.source_batch_id
+    , source_deliveries.ingested_at
+from
+    source_deliveries
+left join
+    staged_deliveries
+    on source_deliveries.source_record_id = staged_deliveries.source_record_id
+where
+    staged_deliveries.source_record_id is null

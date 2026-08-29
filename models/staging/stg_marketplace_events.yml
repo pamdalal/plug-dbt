@@ -1,0 +1,278 @@
+version: 2
+
+models:
+  - name: stg_marketplace_events
+    description: >-
+      Preserves one row per physical marketplace-event delivery from
+      raw_marketplace_events. The model retains every loaded seed column and
+      adds explicit timestamp, sequence, USD, and dollar-cent derivatives.
+      Event-specific identifiers and amounts remain nullable outside their
+      lifecycle contexts. Incremental runs append only deliveries whose
+      ingested_at timestamp is strictly greater than the maximum staged
+      ingested_at_ts; the reverse completeness test exposes equal or earlier
+      deliveries skipped by that boundary.
+    columns:
+      - name: amount_role
+        description: Source-defined semantic role of event_amount when an amount is present.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - accepted_values:
+              arguments:
+                values:
+                  - bid
+                  - confirmed_dealer_price
+                  - reserve
+
+      - name: auction_id
+        description: Marketplace auction identifier associated with the event lifecycle.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: auction_result_code
+        description: Source result assigned when an auction closes.
+        tests:
+          - not_null:
+              config:
+                where: "event_type = 'auction_closed'"
+          - accepted_values:
+              arguments:
+                values:
+                  - awarded
+                  - no_bid
+                  - reserve_not_met
+
+      - name: bid_id
+        description: Bid identifier populated for bid-submission lifecycle events.
+        tests:
+          - not_empty_string
+          - not_null:
+              config:
+                where: "event_type = 'bid_submitted'"
+
+      - name: currency_code
+        description: Currency code supplied when event_amount is present.
+        tests:
+          - not_null:
+              config:
+                where: "event_amount is not null"
+          - accepted_values:
+              arguments:
+                values:
+                  - USD
+
+      - name: dealer_id
+        description: Dealer identifier associated with bidding or transaction activity.
+        tests:
+          - not_empty_string
+          - not_null:
+              config:
+                where: "event_type = 'bid_submitted'"
+
+      - name: event_amount
+        description: Raw nonnegative marketplace amount in event_amount_unit.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: event_amount_cents
+        description: Marketplace amount normalized to whole US dollar cents.
+        tests:
+          - not_null:
+              config:
+                where: "event_amount is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: event_amount_unit
+        description: Unit supplied for the raw marketplace event amount.
+        tests:
+          - not_null:
+              config:
+                where: "event_amount is not null"
+          - accepted_values:
+              arguments:
+                values:
+                  - usd
+                  - usd_cent
+
+      - name: event_amount_usd
+        description: Marketplace amount normalized to US dollars.
+        tests:
+          - not_null:
+              config:
+                where: "event_amount is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: event_at
+        description: Loaded business timestamp when the marketplace event occurred.
+        tests:
+          - not_null
+
+      - name: event_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of event_at.
+        tests:
+          - not_null:
+              config:
+                where: "event_at is not null"
+
+      - name: event_sequence
+        description: Raw source sequence of the event within its auction lifecycle.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: event_sequence_num
+        description: Event sequence explicitly cast to NUMBER(10,0).
+        tests:
+          - not_null:
+              config:
+                where: "event_sequence is not null"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: event_type
+        description: Source-defined marketplace lifecycle event type.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - auction_closed
+                  - bid_submitted
+                  - listing_created
+                  - sale_confirmed
+                  - transaction_cancelled
+                  - transaction_completed
+
+      - name: ingested_at
+        description: Loaded source ingestion timestamp retained without replacement.
+        tests:
+          - not_null
+
+      - name: ingested_at_ts
+        description: Explicit TIMESTAMP_NTZ ordering field used by the incremental boundary.
+        tests:
+          - not_null:
+              config:
+                where: "ingested_at is not null"
+
+      - name: offer_id
+        description: Offer identifier that seeded the marketplace listing.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_offer_events')
+                field: offer_id
+
+      - name: request_id
+        description: Valuation-request identifier associated with the marketplace event.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_valuation_requests')
+                field: request_id
+
+      - name: scheduled_close_at
+        description: Loaded scheduled auction close timestamp established at listing creation.
+        tests:
+          - not_null:
+              config:
+                where: "event_type = 'listing_created'"
+
+      - name: scheduled_close_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of scheduled_close_at.
+        tests:
+          - not_null:
+              config:
+                where: "scheduled_close_at is not null"
+
+      - name: schema_version
+        description: Raw source payload schema version retained from the physical delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+
+      - name: schema_version_num
+        description: Source schema version explicitly cast to NUMBER(10,2).
+        tests:
+          - not_null:
+              config:
+                where: "schema_version is not null"
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+
+      - name: source_batch_id
+        description: Identifier for the source delivery batch that contained the record.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: source_event_id
+        description: Source identifier for the marketplace event represented by the delivery.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: source_record_id
+        description: Unique physical-delivery key supplied by the source fixture.
+        tests:
+          - not_null
+          - unique
+          - not_empty_string
+
+      - name: source_system
+        description: Upstream system that emitted the marketplace-event delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - dealer_marketplace
+
+      - name: source_updated_at
+        description: Loaded source timestamp for the upstream record update.
+        tests:
+          - not_null
+
+      - name: source_updated_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of source_updated_at.
+        tests:
+          - not_null:
+              config:
+                where: "source_updated_at is not null"
+
+      - name: synthetic_vin
+        description: Synthetic VIN-like source observation retained as evidence, not asserted as a universal VIN.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: transaction_id
+        description: Marketplace transaction identifier populated from sale confirmation onward.
+        tests:
+          - not_empty_string
+          - not_null:
+              config:
+                where: "event_type in ('sale_confirmed', 'transaction_completed', 'transaction_cancelled')"
