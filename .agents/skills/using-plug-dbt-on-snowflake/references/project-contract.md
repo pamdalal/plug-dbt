@@ -1,102 +1,83 @@
 # plug_dbt project contract
 
-Use this reference as a baseline, then re-read the repository because the
-project can evolve.
+Use this reference as a baseline, then re-read the repository because the project can evolve.
 
 ## Project shape
 
 - Project and profile name: `plug_dbt`.
 - Adapter target: Snowflake.
-- Model layers: `models/staging/` and `models/intermediate/`.
+- Model root: `models/`.
 - Seed root: `seeds/`.
-- Staging materialization default: incremental.
-- Intermediate materialization default: view.
-- Every model SQL file has a same-base-name YAML file.
-- No package dependency is established.
-- `fct_vehicle_lifecycle` is intentionally absent as the candidate exercise.
+- Current modeled layer: `models/staging/`.
+- Staging materialization default: `view` from `dbt_project.yml`.
+- Current smoke-test model: `stg_example`, documented in `models/staging/_staging.yml`.
+- Configured but not necessarily present until needed: `analyses/`, `tests/`, `macros/`, and `snapshots/`.
+- No package contract is currently established. Do not assume `dbt_utils` or another package exists.
 
-## Four synthetic raw sources
+## Inputs are synthetic raw evidence
 
-The CSVs were copied byte-for-byte from clean `plug-tech-screen` commit
-`24fc26b1539754f15c18e9f8fc43f200f55ecc49`.
+The version-controlled CSVs are practice fixtures, not a production ingestion pattern. They are dbt seeds, so reference them with `ref()`.
 
-| Seed | Physical grain | Fixed source system |
-| --- | --- | --- |
-| `raw_valuation_requests` | One immutable request delivery | `valuation_portal` |
-| `raw_vehicle_assessments` | One assessment-version or unsupported-envelope delivery | `vehicle_assessment` |
-| `raw_offer_events` | One claimed immutable offer-event delivery | `offer_service` |
-| `raw_marketplace_events` | One typed immutable marketplace-event delivery | `dealer_marketplace` |
+Treat the loaded Snowflake seed relations—not the CSV quoting—as the executable type boundary. dbt/Snowflake can infer numeric or timestamp types for text that looks numeric or temporal. Inspect loaded column types and representative values before claiming that leading zeros, original timestamp text, source offsets, or formatting were preserved. If lexical preservation is required, propose explicit seed `column_types` configuration and explain the reload impact before changing it.
 
-Every source carries `source_record_id`, `source_system`, `source_batch_id`,
-lexical `schema_version`, `synthetic_vin`, `request_id`,
-`source_updated_at`, and `ingested_at`. The physical key is
-`(source_system, source_record_id)`.
+### `raw_valuation_requests`
 
-Every seed column is explicitly loaded as Snowflake `VARCHAR` with
-`quote_columns: false`. Never repair, infer types, or deduplicate at the seed
-boundary.
+The documented grain is one delivered valuation request record per row. Important field groups include:
 
-## Staging contract
+- delivery/provenance: `source_record_id`, `source_system`, `source_batch_id`, `schema_version`, `source_updated_at`, `ingested_at`;
+- request identity: `request_id`;
+- submitter/channel: `submitter_type`, `submitter_account_id`, `channel`;
+- observations: `vin_like`, `odometer_value`, `odometer_unit`, `postal_code`, `submitted_at`;
+- synthetic contact fields: `contact_name`, `contact_email`, `contact_phone`.
 
-Each `stg_*` model:
+Do not claim that `request_id` or any other candidate key is unique until it is profiled.
 
-- remains one row per physical delivery;
-- explicitly uses incremental append materialization;
-- never configures `unique_key` or merge behavior;
-- retains every raw field and delivery identifier;
-- adds a deterministic namespaced `delivery_sk`;
-- adds explicit `TIMESTAMP_TZ` derivatives;
-- uses exact fixed-point numeric derivatives;
-- exposes explicit odometer or amount normalization fields;
-- keeps warning/normalization flags separate from disposition;
-- uses parsed `ingested_at` with a strict greater-than watermark; and
-- loads all rows when the existing maximum watermark is null.
+### `raw_offer_events`
 
-Equal-watermark and earlier deliveries are exposed by reverse completeness
-tests rather than silently replayed.
+The documented grain is one physical delivery of a claimed immutable offer event per row. Important field groups include:
 
-## Disposition and canonical inputs
+- delivery/provenance: `source_record_id`, `source_system`, `source_batch_id`, `schema_version`, `source_updated_at`, `ingested_at`;
+- event identity and lifecycle: `source_event_id`, `offer_id`, `request_id`, `event_type`, `event_sequence`, `offer_version`, `event_at`;
+- value: `offer_amount`, `offer_amount_unit`, `currency_code`;
+- lifecycle context: `expires_at`, `reason_code`.
 
-The four source-specific disposition models derive:
+Expect repeated `offer_id` values across lifecycle events and mixed amount units. Do not collapse physical deliveries or choose a winning event without an explicit downstream grain and deterministic ordering policy.
 
-- supported-schema and row-contract checks;
-- source-specific immutable replay groups and complete payload comparison;
-- deterministic survivors ordered by parsed `ingested_at` and
-  `source_record_id`;
-- request and synthetic-VIN relationships;
-- point-in-time pricing-assessment availability; and
-- supported marketplace confirmation transitions.
+## Evidence-preservation rules
 
-Every physical delivery receives exactly one `accepted`, `duplicate`, or
-`quarantined` disposition. `int_delivery_dispositions` exposes source,
-delivery key, request ID, disposition, reason, and survivor delivery key. The
-four `int_canonical_*` views contain accepted survivors only.
+- Never repair, normalize, reorder, or deduplicate the CSV fixtures in place.
+- Preserve the values and types available at the loaded seed boundary in staging models; do not claim that unrecoverable CSV lexical formatting survived inference.
+- When required semantics cannot survive inferred seed types, propose explicit seed column types rather than compensating downstream.
+- Add trimmed, case-normalized, typed, or unit-normalized derivatives alongside raw evidence when those derivatives are needed.
+- Treat `vin_like` as an observation, not a guaranteed universal vehicle identifier. Do not rename it to `vin` or assert domain validity without a documented rule.
+- Treat request/offer timestamps as separate business, source-update, and ingestion concepts. Do not substitute one for another.
+- Retain source record and batch identifiers wherever lineage, replay analysis, or deterministic deduplication may matter.
+- Keep synthetic contact fields out of downstream governed outputs by default.
 
-Do not hardcode finding IDs, expected rows, survivor maps, disposition totals,
-latent values, or lifecycle answers.
+## Modeling boundaries
 
-## Candidate lifecycle boundary
+Use these prefixes when a new layer is justified:
 
-The future `fct_vehicle_lifecycle` pair has one row per `request_id` and the
-13-column contract documented in `README.md` and `docs/migration.md`. The
-candidate owns point-in-time assessment selection, current offer-version
-selection, marketplace reconstruction, request-grain fan-in, lifecycle and
-label classification, focused tests, reconciliation, and bounded analysis.
+- `stg_`: source-aligned cleanup, explicit types, renamed/normalized derivatives, and preserved provenance;
+- `int_`: reusable joins, event ordering, deduplication, lifecycle derivation, or grain changes;
+- `dim_` / `fct_`: stable consumer-facing dimensions and facts with explicit contracts.
 
-## YAML and tests
+Do not force the project to have every layer. Create the fewest models that keep grains and responsibilities clear.
 
-- List every final-select column alphabetically.
-- Give every output column a meaningful description and contract-backed test.
-- Use native generic tests first, project-local generic tests second, and
-  focused singular SQL tests for asymmetric reconciliation.
-- Profile every loaded column in the confirmed development target before
-  claiming warehouse validation is complete.
-- Preserve imperfect evidence through disposition rather than weakening tests
-  or repairing source rows.
+Prefer one staging model per seed when staging work begins. Keep valuation-request and offer-event grains separate until a downstream requirement justifies a join. Joining raw grains without first stating cardinality can multiply rows.
 
-## Profile and safety
+## YAML and test style
 
-`profiles.yml.example` reads:
+- Colocate YAML with the model layer.
+- Follow the existing repository syntax unless a dbt-version migration is explicitly in scope.
+- Describe the model purpose, row grain, provenance, normalization choices, and non-obvious null semantics.
+- Test candidate keys only after verifying them against the data.
+- Add relationship tests only after measuring orphan behavior and confirming it is expected to be enforced.
+- Derive accepted values from observed data plus an established domain contract, never from guesswork.
+
+## Profile and secrets
+
+`profiles.yml.example` defines a `dev` output and reads these environment variables:
 
 - `DBT_SNOWFLAKE_ACCOUNT`
 - `DBT_SNOWFLAKE_USER`
@@ -104,9 +85,8 @@ label classification, focused tests, reconciliation, and bounded analysis.
 - `DBT_SNOWFLAKE_ROLE`
 - `DBT_SNOWFLAKE_DATABASE`
 - `DBT_SNOWFLAKE_WAREHOUSE`
-- `DBT_SNOWFLAKE_SCHEMA`
+- `DBT_SNOWFLAKE_SCHEMA` (defaults to `DBT_DEV`)
 
-The schema fallback is `DBT_MIGRATION`, but warehouse work must still confirm
-an explicitly intended pre-created non-production schema. Never expose secret
-values, run direct Snowflake DDL, use an unscoped build, or run
-`--full-refresh` without explicit approval.
+The example currently uses four threads. The README's sample Snowflake objects are `PLUG_DBT_WH`, `PLUG_DBT_DEV`, and `DBT_DEV`.
+
+Never expose resolved secret values. Authentication requirements can change independently of this repository; if authentication setup is in scope, consult current dbt and Snowflake documentation and propose changes separately rather than silently rewriting the profile contract.

@@ -3,130 +3,103 @@ version: 2
 models:
   - name: stg_valuation_requests
     description: >
-      Preserves one row per physical valuation-request delivery, including all
-      raw text fields, at the delivery_sk grain. The model parses offset-aware
-      timestamps, derives exact odometer values in both supported units, and
-      flags non-Z timestamp representations without changing disposition.
-      Incremental runs append only rows whose parsed ingested_at instant is
-      strictly greater than the target maximum; a null target maximum loads all
-      rows. Equal-watermark and earlier deliveries remain visible through the
-      bidirectional seed-to-staging completeness tests.
+      Preserves one row per physical raw_valuation_requests delivery at the
+      source_record_id grain without merging, deduplicating, or selecting a
+      canonical request. Incremental runs append only source rows whose
+      ingested_at is strictly greater than the maximum ingested_at already in
+      the target, so equal-watermark and backdated deliveries are surfaced by
+      the reverse completeness test. valuation_request_sk hashes the constant
+      entity namespace valuation_request with source_system and
+      source_record_id, preventing identical source identifiers in other fact
+      types from sharing a key. All hash inputs and loaded source columns are
+      retained for traceability. submitter_account_id remains null when the
+      source delivery does not identify an account, and synthetic contact
+      fields remain source evidence rather than governed customer attributes.
     columns:
-      - name: delivery_sk
-        description: Deterministic physical-delivery key namespaced to raw valuation requests.
+      - name: channel
+        description: Source channel through which the valuation request was submitted.
         tests:
           - not_null
-          - unique
-      - name: has_non_z_timestamp_representation
-        description: True when any delivered timestamp uses an explicit offset instead of a trailing Z.
+      - name: contact_email
+        description: Synthetic source email retained as delivery evidence; non-null values must contain non-whitespace text.
         tests:
-          - accepted_values:
-              arguments:
-                values: [true, false]
-                quote: false
+          - not_empty_string
+      - name: contact_name
+        description: Synthetic source contact name retained as delivery evidence; non-null values must contain non-whitespace text.
+        tests:
+          - not_empty_string
+      - name: contact_phone
+        description: Synthetic source phone value retained as delivery evidence; non-null values must contain non-whitespace text.
+        tests:
+          - not_empty_string
       - name: ingested_at
-        description: Raw offset-aware warehouse-arrival timestamp used as the incremental watermark.
+        description: Required source loading timestamp and strict append-only incremental watermark.
         tests:
           - not_null
-      - name: ingested_at_ts
-        description: Parsed TIMESTAMP_TZ instant for the raw ingestion timestamp.
-        tests:
-          - not_null
-      - name: market_region
-        description: Frozen synthetic market region associated with the seller request.
-        tests:
-          - accepted_values:
-              arguments:
-                values: [great_lakes, mid_atlantic, mountain_west, pacific_coast]
-      - name: odometer_kilometers
-        description: Exact odometer observation normalized to kilometers using 1 mi = 1.609344 km.
-        tests:
-          - accepted_range:
-              arguments:
-                inclusive: false
-                min_value: 0
-      - name: odometer_miles
-        description: Exact odometer observation normalized to miles using 1 mi = 1.609344 km.
-        tests:
-          - accepted_range:
-              arguments:
-                inclusive: false
-                min_value: 0
       - name: odometer_unit
-        description: Raw unit governing the delivered odometer value.
-        tests:
-          - accepted_values:
-              arguments:
-                values: [mi, km]
-      - name: odometer_unit_normalized
-        description: True when kilometer input required conversion to produce the miles derivative.
-        tests:
-          - accepted_values:
-              arguments:
-                values: [true, false]
-                quote: false
-      - name: odometer_value
-        description: Raw positive-integer odometer text preserved exactly from the seed.
+        description: Required raw unit used to interpret the delivered odometer observation.
         tests:
           - not_null
-      - name: odometer_value_numeric
-        description: Exact numeric interpretation of the raw odometer text in odometer_unit.
+      - name: odometer_value
+        description: Raw non-negative odometer observation preserved in odometer_unit without canonical-unit conversion.
         tests:
           - accepted_range:
               arguments:
-                inclusive: false
+                inclusive: true
+                min_value: 0
+      - name: postal_code
+        description: Source postal-code value at the Snowflake seed type boundary; lexical formatting lost during seed inference is not reconstructed.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: true
                 min_value: 0
       - name: request_id
-        description: Immutable valuation-request identifier and future lifecycle fact grain.
+        description: Source valuation-request identifier that may repeat across distinct physical deliveries.
         tests:
           - not_null
       - name: schema_version
-        description: Lexical source payload version retained as text.
+        description: Positive source payload schema version associated with the physical delivery.
         tests:
-          - accepted_values:
+          - accepted_range:
               arguments:
-                values: ["1.0"]
-      - name: seller_id
-        description: Synthetic individual-seller identifier associated with the request.
-        tests:
-          - not_null
+                inclusive: true
+                min_value: 1
       - name: source_batch_id
-        description: Physical delivery-batch lineage identifier with no business-key semantics.
+        description: Required source delivery batch identifier retained for provenance and replay analysis.
         tests:
           - not_null
       - name: source_record_id
-        description: Source-system identifier for one immutable physical delivery.
+        description: Durable identifier for one physical source-delivery row; it defines the model grain but is never used to merge or deduplicate.
         tests:
           - not_null
+          - unique
       - name: source_system
-        description: Fixed producer namespace for valuation-request deliveries.
+        description: Required identifier for the system that produced the delivered valuation request.
         tests:
-          - accepted_values:
-              arguments:
-                values: [valuation_portal]
+          - not_null
       - name: source_updated_at
-        description: Raw offset-aware source-change timestamp retained for replay comparison.
+        description: Required source-system timestamp for the latest update represented by the payload.
         tests:
           - not_null
-      - name: source_updated_at_ts
-        description: Parsed TIMESTAMP_TZ instant for the source-change timestamp.
-        tests:
-          - not_null
-      - name: submission_channel
-        description: Frozen channel through which the individual owner submitted the request.
-        tests:
-          - accepted_values:
-              arguments:
-                values: [web, mobile]
       - name: submitted_at
-        description: Raw offset-aware business timestamp when the seller submitted the request.
+        description: Source-provided timestamp when the valuation request was submitted.
         tests:
           - not_null
-      - name: submitted_at_ts
-        description: Parsed TIMESTAMP_TZ instant for request submission.
+      - name: submitter_account_id
+        description: Nullable source account identifier; anonymous consumer submissions intentionally retain null.
+        tests:
+          - not_empty_string
+      - name: submitter_type
+        description: Required source classification of the party submitting the valuation request.
         tests:
           - not_null
-      - name: synthetic_vin
-        description: Authoritative visibly synthetic cross-source vehicle trace key for this fixture.
+      - name: valuation_request_sk
+        description: Namespaced surrogate key for one physical valuation-request delivery, generated by hashing the valuation_request entity namespace, source_system, and source_record_id.
         tests:
           - not_null
+          - unique
+      - name: vin_like
+        description: Required source vehicle-identifier observation retained without trimming, case normalization, or domain-validity claims.
+        tests:
+          - not_empty_string

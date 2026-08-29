@@ -9,5 +9,5 @@ plug_dbt:
       role: "{{ env_var('DBT_SNOWFLAKE_ROLE') }}"
       database: "{{ env_var('DBT_SNOWFLAKE_DATABASE') }}"
       warehouse: "{{ env_var('DBT_SNOWFLAKE_WAREHOUSE') }}"
-      schema: "{{ env_var('DBT_SNOWFLAKE_SCHEMA', 'DBT_MIGRATION') }}"
+      schema: "{{ env_var('DBT_SNOWFLAKE_SCHEMA', 'DBT_DEV') }}"
       threads: 4

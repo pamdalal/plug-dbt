@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: fct_events
+    description: >
+      Provides one row per deduplicated business event across valuation
+      requests and offer lifecycles. The model is rebuilt as a table on every
+      run. Valuation-request submissions are keyed by the
+      valuation_request_submitted namespace, source_system, and request_id.
+      Offer lifecycle events are keyed by the offer_business_event namespace,
+      source_system, offer_id, and event_sequence. Physical redeliveries are
+      unioned before the earliest ingested_at and source_record_id delivery is
+      selected for each sk. Conflicting names or timestamps for the same sk are
+      rejected by a singular data test rather than silently treated as valid
+      duplicates.
+    columns:
+      - name: event_at
+        description: Business timestamp when the submitted request or offer lifecycle event occurred.
+        tests:
+          - not_null
+      - name: event_name
+        description: Domain-specific action, such as submitted, issued, revised, accepted, declined, expired, or withdrawn.
+        tests:
+          - not_null
+      - name: event_type
+        description: Stable event domain distinguishing valuation-request events from offer events.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - offer
+                  - valuation_request
+      - name: sk
+        description: Namespaced surrogate key for one deduplicated business event across all event domains.
+        tests:
+          - not_null
+          - unique
