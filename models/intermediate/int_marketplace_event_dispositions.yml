@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: int_marketplace_event_dispositions
+    description: >
+      Emits exactly one runtime-derived disposition per physical marketplace
+      delivery. Supported rows replay-group by auction ID and event sequence,
+      then enforce request/VIN and offer relationships. Sale confirmations must
+      follow one awarded close and match its bid, dealer, and temporal order.
+    columns:
+      - name: delivery_sk
+        description: Physical marketplace-event delivery key receiving one disposition.
+        tests:
+          - not_null
+          - unique
+      - name: disposition
+        description: Exhaustive accepted, duplicate, or quarantined classification.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [accepted, duplicate, quarantined]
+      - name: disposition_reason
+        description: Nullable runtime reason explaining duplicate or quarantine handling.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - exact_replay
+                  - identity_mismatch
+                  - immutable_key_conflict
+                  - invalid_marketplace_transition
+                  - orphaned_offer
+                  - orphaned_request
+                  - schema_validation_error
+                  - unsupported_schema_version
+      - name: request_id
+        description: Request identity carried by the physical delivery.
+        tests:
+          - not_null
+      - name: source
+        description: Stable source name for the common disposition interface.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [raw_marketplace_events]
+      - name: survivor_delivery_sk
+        description: Accepted earliest-delivery pointer populated only for exact replay duplicates.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_marketplace_events')
+                field: delivery_sk

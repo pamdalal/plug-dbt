@@ -1,0 +1,233 @@
+version: 2
+
+models:
+  - name: int_canonical_marketplace_events
+    description: >
+      Contains accepted marketplace-event replay survivors only. It preserves
+      listing, bid, close, confirmation, and operational evidence with raw,
+      parsed, exact amount, normalized, and warning fields; it does not
+      reconstruct the auction winner or request lifecycle.
+    columns:
+      - name: amount_role
+        description: Conditional accepted monetary role for reserve, bid, or confirmed price.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [reserve, bid, confirmed_dealer_price]
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - null_when:
+              arguments:
+                condition: "event_type not in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: auction_id
+        description: Canonical auction identifier carried by every accepted marketplace event.
+        tests:
+          - not_null
+      - name: auction_result_code
+        description: Conditional accepted auction close result.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [awarded, no_bid, reserve_not_met]
+          - required_when:
+              arguments:
+                condition: "event_type = 'auction_closed'"
+          - null_when:
+              arguments:
+                condition: "event_type <> 'auction_closed'"
+      - name: bid_id
+        description: Conditional accepted bid identifier for bids, awarded closes, and confirmations.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('bid_submitted', 'sale_confirmed') or (event_type = 'auction_closed' and auction_result_code = 'awarded')"
+      - name: currency_code
+        description: Conditional accepted USD currency code for monetary events.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [USD]
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: dealer_id
+        description: Conditional accepted dealer identifier for bids, awarded closes, and confirmations.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('bid_submitted', 'sale_confirmed') or (event_type = 'auction_closed' and auction_result_code = 'awarded')"
+      - name: delivery_sk
+        description: Accepted physical delivery selected as the marketplace-event survivor.
+        tests:
+          - not_null
+          - unique
+      - name: event_amount
+        description: Raw accepted monetary text on reserve, bid, and confirmed price events.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - null_when:
+              arguments:
+                condition: "event_type not in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_numeric
+        description: Exact numeric accepted amount before normalization.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_unit
+        description: Conditional raw USD unit governing accepted event amounts.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [usd]
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_unit_normalized
+        description: False because accepted marketplace amounts are delivered in USD.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [false]
+                quote: false
+      - name: event_amount_usd
+        description: Exact accepted event amount normalized to USD.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_usd_cents
+        description: Exact accepted event amount normalized to integer USD cents.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_at
+        description: Raw business timestamp of the accepted marketplace event.
+        tests:
+          - not_null
+      - name: event_at_ts
+        description: Parsed business instant of the accepted marketplace event.
+        tests:
+          - not_null
+      - name: event_sequence
+        description: Raw logical event position retained for candidate auction reconstruction.
+        tests:
+          - not_null
+      - name: event_sequence_numeric
+        description: Exact positive integer event position.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+      - name: event_type
+        description: Accepted marketplace event classification.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - listing_created
+                  - bid_submitted
+                  - auction_closed
+                  - sale_confirmed
+                  - transaction_completed
+                  - transaction_cancelled
+      - name: has_non_z_timestamp_representation
+        description: True when accepted evidence uses an explicit offset instead of a trailing Z.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: ingested_at
+        description: Raw arrival timestamp of the accepted marketplace delivery.
+        tests:
+          - not_null
+      - name: ingested_at_ts
+        description: Parsed arrival instant of the accepted marketplace delivery.
+        tests:
+          - not_null
+      - name: offer_id
+        description: Canonical offer foreign key for the accepted marketplace event.
+        tests:
+          - not_null
+      - name: request_id
+        description: Canonical request foreign key for the accepted marketplace event.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_canonical_valuation_requests')
+                field: request_id
+      - name: scheduled_close_at
+        description: Raw contractual deadline on accepted listing creation.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type = 'listing_created'"
+          - null_when:
+              arguments:
+                condition: "event_type <> 'listing_created'"
+      - name: scheduled_close_at_ts
+        description: Parsed contractual close deadline on accepted listing creation.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type = 'listing_created'"
+          - null_when:
+              arguments:
+                condition: "event_type <> 'listing_created'"
+      - name: schema_version
+        description: Supported lexical marketplace schema version.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["1.0"]
+      - name: source_batch_id
+        description: Accepted delivery-batch lineage retained for auditability.
+        tests:
+          - not_null
+      - name: source_event_id
+        description: Claimed immutable event identifier on the accepted delivery.
+        tests:
+          - not_null
+      - name: source_record_id
+        description: Source identifier of the accepted physical marketplace delivery.
+        tests:
+          - not_null
+      - name: source_system
+        description: Fixed dealer-marketplace producer namespace.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [dealer_marketplace]
+      - name: source_updated_at
+        description: Raw source-change timestamp of the accepted marketplace delivery.
+        tests:
+          - not_null
+      - name: source_updated_at_ts
+        description: Parsed source-change instant of the accepted marketplace delivery.
+        tests:
+          - not_null
+      - name: synthetic_vin
+        description: Synthetic vehicle key already reconciled to the canonical request.
+        tests:
+          - not_null
+      - name: transaction_id
+        description: Conditional accepted transaction identifier on confirmation and terminal events.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('sale_confirmed', 'transaction_completed', 'transaction_cancelled')"

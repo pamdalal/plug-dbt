@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: int_vehicle_assessment_dispositions
+    description: >
+      Emits exactly one runtime-derived disposition per physical assessment
+      delivery. Supported rows replay-group by assessment ID and version before
+      request existence and synthetic-VIN identity are checked. Unsupported
+      schema evidence remains quarantined rather than interpreted.
+    columns:
+      - name: delivery_sk
+        description: Physical vehicle-assessment delivery key receiving one disposition.
+        tests:
+          - not_null
+          - unique
+      - name: disposition
+        description: Exhaustive accepted, duplicate, or quarantined classification.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [accepted, duplicate, quarantined]
+      - name: disposition_reason
+        description: Nullable runtime reason explaining duplicate or quarantine handling.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - exact_replay
+                  - identity_mismatch
+                  - immutable_key_conflict
+                  - orphaned_request
+                  - schema_validation_error
+                  - unsupported_schema_version
+      - name: request_id
+        description: Request identity carried by the physical delivery.
+        tests:
+          - not_null
+      - name: source
+        description: Stable source name for the common disposition interface.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [raw_vehicle_assessments]
+      - name: survivor_delivery_sk
+        description: Accepted earliest-delivery pointer populated only for exact replay duplicates.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_vehicle_assessments')
+                field: delivery_sk

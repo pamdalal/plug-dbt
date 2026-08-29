@@ -2,73 +2,89 @@
     config(
         materialized='incremental',
         incremental_strategy='append',
-        on_schema_change='append_new_columns'
+        on_schema_change='fail'
     )
 }}
 
 with source as (
 
-    select *
+    select
+        ingested_at,
+        market_region,
+        odometer_unit,
+        odometer_value,
+        request_id,
+        schema_version,
+        seller_id,
+        source_batch_id,
+        source_record_id,
+        source_system,
+        source_updated_at,
+        submission_channel,
+        submitted_at,
+        synthetic_vin,
+        to_timestamp_tz(ingested_at) as ingested_at_ts,
+        try_to_decimal(odometer_value, 38, 0) as odometer_value_numeric,
+        try_to_timestamp_tz(source_updated_at) as source_updated_at_ts,
+        try_to_timestamp_tz(submitted_at) as submitted_at_ts
     from {{ ref('raw_valuation_requests') }}
 
     {% if is_incremental() %}
-        where ingested_at > (select max(ingested_at) from {{ this }})
+        where (
+            (select max(ingested_at_ts) from {{ this }}) is null
+            or to_timestamp_tz(ingested_at)
+                > (select max(ingested_at_ts) from {{ this }})
+        )
     {% endif %}
-
-),
-
-normalized as (
-
-    select
-        source_record_id,
-        request_id,
-        source_system,
-        source_batch_id,
-        schema_version,
-        submitter_type,
-        submitter_account_id,
-        channel,
-        vin_like,
-        odometer_value,
-        odometer_unit,
-        postal_code,
-        contact_name,
-        contact_email,
-        contact_phone,
-        submitted_at,
-        source_updated_at,
-        ingested_at,
-        md5(
-            to_json(
-                array_construct(
-                    'valuation_request',
-                    source_system,
-                    source_record_id
-                )
-            )
-        ) as valuation_request_sk
-    from source
 
 )
 
 select
-    valuation_request_sk,
-    source_record_id,
-    request_id,
-    source_system,
-    source_batch_id,
-    schema_version,
-    submitter_type,
-    submitter_account_id,
-    channel,
-    vin_like,
-    odometer_value,
+    ingested_at,
+    ingested_at_ts,
+    market_region,
     odometer_unit,
-    postal_code,
-    contact_name,
-    contact_email,
-    contact_phone,
-    submitted_at,
+    odometer_value,
+    odometer_value_numeric,
+    request_id,
+    schema_version,
+    seller_id,
+    source_batch_id,
+    source_record_id,
+    source_system,
     source_updated_at,
-    ingested_at
-from normalized
+    source_updated_at_ts,
+    submission_channel,
+    submitted_at,
+    submitted_at_ts,
+    synthetic_vin,
+    md5(
+        to_json(
+            array_construct(
+                'raw_valuation_requests',
+                source_system,
+                source_record_id
+            )
+        )
+    ) as delivery_sk,
+    (
+        not regexp_like(ingested_at, 'Z$')
+        or not regexp_like(source_updated_at, 'Z$')
+        or not regexp_like(submitted_at, 'Z$')
+    ) as has_non_z_timestamp_representation,
+    cast(
+        case
+            when odometer_unit = 'km' then odometer_value_numeric
+            when odometer_unit = 'mi' then odometer_value_numeric * 1.609344
+        end
+        as number(38, 6)
+    ) as odometer_kilometers,
+    cast(
+        case
+            when odometer_unit = 'mi' then odometer_value_numeric
+            when odometer_unit = 'km' then odometer_value_numeric / 1.609344
+        end
+        as number(38, 6)
+    ) as odometer_miles,
+    odometer_unit = 'km' as odometer_unit_normalized
+from source

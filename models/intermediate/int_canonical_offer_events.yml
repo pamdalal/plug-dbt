@@ -1,18 +1,15 @@
 version: 2
 
 models:
-  - name: stg_offer_events
+  - name: int_canonical_offer_events
     description: >
-      Preserves one row per physical offer-event delivery at the delivery_sk
-      grain without replay selection or lifecycle reconstruction. Every raw
-      field remains available alongside parsed TIMESTAMP_TZ values, exact
-      integer/version derivatives, exact USD and USD-cent amount derivatives,
-      and a flag showing when a complete pricing block was normalized from
-      cents. Pricing fields remain null on seller terminal events. Incremental
-      runs use parsed ingested_at with a strict greater-than watermark.
+      Contains accepted offer-event replay survivors only. It preserves all raw
+      pricing and seller-response evidence plus exact typed and normalized
+      derivatives; it does not select the current offer version or reconstruct
+      the seller lifecycle.
     columns:
       - name: assessment_id_used
-        description: Assessment attempt referenced by an issued or revised pricing evaluation.
+        description: Accepted pricing event's referenced assessment attempt.
         tests:
           - required_when:
               arguments:
@@ -21,7 +18,7 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: assessment_version_used
-        description: Raw assessment version referenced by a pricing-bearing offer event.
+        description: Raw referenced assessment version on accepted pricing events.
         tests:
           - accepted_values:
               arguments:
@@ -33,7 +30,7 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: assessment_version_used_numeric
-        description: Exact integer interpretation of the pricing assessment version.
+        description: Exact integer referenced assessment version on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -42,37 +39,37 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: delivery_sk
-        description: Deterministic physical-delivery key namespaced to raw offer events.
+        description: Accepted physical delivery selected as the offer-event survivor.
         tests:
           - not_null
           - unique
       - name: event_at
-        description: Raw offset-aware business timestamp for the claimed immutable offer event.
+        description: Raw business timestamp of the accepted immutable offer event.
         tests:
           - not_null
       - name: event_at_ts
-        description: Parsed TIMESTAMP_TZ instant for event_at.
+        description: Parsed business instant of the accepted offer event.
         tests:
           - not_null
       - name: event_sequence
-        description: Raw positive event position within the logical offer.
+        description: Raw logical event position retained for candidate reconstruction.
         tests:
           - not_null
       - name: event_sequence_numeric
-        description: Exact integer interpretation of event_sequence.
+        description: Exact positive integer event position.
         tests:
           - accepted_range:
               arguments:
                 inclusive: false
                 min_value: 0
       - name: event_type
-        description: Closed source event vocabulary for pricing and seller-response events.
+        description: Accepted pricing or seller-response event classification.
         tests:
           - accepted_values:
               arguments:
                 values: [issued, revised, accepted, declined, expired, withdrawn]
       - name: expires_at
-        description: Raw contractual expiry timestamp carried only by pricing-bearing events.
+        description: Raw contractual expiry on accepted pricing-bearing events.
         tests:
           - required_when:
               arguments:
@@ -81,7 +78,7 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: expires_at_ts
-        description: Parsed TIMESTAMP_TZ instant for the pricing-bearing event expiry.
+        description: Parsed contractual expiry instant on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -90,7 +87,7 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: feature_cutoff_at
-        description: Raw point-in-time feature cutoff carried only by pricing-bearing events.
+        description: Raw point-in-time feature cutoff on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -99,7 +96,7 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: feature_cutoff_at_ts
-        description: Parsed TIMESTAMP_TZ instant for the point-in-time feature cutoff.
+        description: Parsed point-in-time feature cutoff on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -108,22 +105,22 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: has_non_z_timestamp_representation
-        description: True when any delivered timestamp uses an explicit offset instead of a trailing Z.
+        description: True when accepted evidence uses an explicit offset instead of a trailing Z.
         tests:
           - accepted_values:
               arguments:
                 values: [true, false]
                 quote: false
       - name: ingested_at
-        description: Raw offset-aware warehouse-arrival timestamp used as the incremental watermark.
+        description: Raw arrival timestamp of the accepted offer delivery.
         tests:
           - not_null
       - name: ingested_at_ts
-        description: Parsed TIMESTAMP_TZ instant for the raw ingestion timestamp.
+        description: Parsed arrival instant of the accepted offer delivery.
         tests:
           - not_null
       - name: net_policy_adjustment_amount
-        description: Raw signed policy adjustment in pricing_amount_unit on pricing-bearing events.
+        description: Raw signed policy adjustment on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -132,44 +129,35 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: net_policy_adjustment_amount_numeric
-        description: Exact numeric interpretation of the raw signed policy adjustment before normalization.
+        description: Exact numeric raw policy adjustment before unit normalization.
         tests:
           - required_when:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
-          - null_when:
-              arguments:
-                condition: "event_type not in ('issued', 'revised')"
       - name: net_policy_adjustment_usd
-        description: Exact signed policy adjustment normalized to USD without currency conversion.
+        description: Exact signed policy adjustment normalized to USD.
         tests:
           - required_when:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
-          - null_when:
-              arguments:
-                condition: "event_type not in ('issued', 'revised')"
       - name: net_policy_adjustment_usd_cents
         description: Exact signed policy adjustment normalized to integer USD cents.
         tests:
           - required_when:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
-          - null_when:
-              arguments:
-                condition: "event_type not in ('issued', 'revised')"
       - name: offer_id
-        description: Logical offer identifier shared by its pricing versions and seller outcome.
+        description: Logical offer identifier shared across accepted events.
         tests:
           - not_null
       - name: offer_version
-        description: Raw positive offer version referenced by the event.
+        description: Raw supported offer version referenced by the accepted event.
         tests:
           - accepted_values:
               arguments:
                 values: ["1", "2"]
       - name: offer_version_numeric
-        description: Exact integer interpretation of offer_version.
+        description: Exact supported integer offer version.
         tests:
           - accepted_range:
               arguments:
@@ -177,7 +165,7 @@ models:
                 min_value: 1
                 max_value: 2
       - name: predicted_wholesale_value_amount
-        description: Raw positive wholesale prediction in pricing_amount_unit on pricing-bearing events.
+        description: Raw positive wholesale prediction on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -186,16 +174,13 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: predicted_wholesale_value_amount_numeric
-        description: Exact numeric interpretation of the raw wholesale prediction before normalization.
+        description: Exact numeric wholesale prediction before unit normalization.
         tests:
           - required_when:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
-          - null_when:
-              arguments:
-                condition: "event_type not in ('issued', 'revised')"
       - name: predicted_wholesale_value_usd
-        description: Exact wholesale prediction normalized to USD without currency conversion.
+        description: Exact accepted wholesale prediction normalized to USD.
         tests:
           - accepted_range:
               arguments:
@@ -205,7 +190,7 @@ models:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
       - name: predicted_wholesale_value_usd_cents
-        description: Exact wholesale prediction normalized to integer USD cents.
+        description: Exact accepted wholesale prediction normalized to integer USD cents.
         tests:
           - accepted_range:
               arguments:
@@ -215,7 +200,7 @@ models:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
       - name: pricing_amount_unit
-        description: Raw unit governing every amount in a complete pricing block.
+        description: Raw amount unit governing the accepted complete pricing block.
         tests:
           - accepted_values:
               arguments:
@@ -227,14 +212,14 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: pricing_amount_unit_normalized
-        description: True when the complete pricing block was delivered in integer cents and normalized.
+        description: True when accepted pricing evidence was delivered in integer cents.
         tests:
           - accepted_values:
               arguments:
                 values: [true, false]
                 quote: false
       - name: pricing_currency_code
-        description: Currency governing the complete pricing block; no currency conversion is performed.
+        description: Currency governing the accepted complete pricing block.
         tests:
           - accepted_values:
               arguments:
@@ -242,11 +227,8 @@ models:
           - required_when:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
-          - null_when:
-              arguments:
-                condition: "event_type not in ('issued', 'revised')"
       - name: pricing_evaluated_at
-        description: Raw timestamp when the pricing model produced the evaluation.
+        description: Raw model-evaluation timestamp on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -255,16 +237,13 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: pricing_evaluated_at_ts
-        description: Parsed TIMESTAMP_TZ instant for pricing evaluation.
+        description: Parsed model-evaluation instant on accepted pricing events.
         tests:
           - required_when:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
-          - null_when:
-              arguments:
-                condition: "event_type not in ('issued', 'revised')"
       - name: pricing_evaluation_id
-        description: Immutable identifier for one pricing evaluation and offer version.
+        description: Immutable pricing evaluation identifier on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -273,7 +252,7 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: pricing_model_version
-        description: Fictional model version used for a pricing-bearing event.
+        description: Fictional model version on accepted pricing events.
         tests:
           - accepted_values:
               arguments:
@@ -282,7 +261,7 @@ models:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
       - name: pricing_policy_version
-        description: Frozen pricing policy version applied to a pricing-bearing event.
+        description: Frozen policy version on accepted pricing events.
         tests:
           - accepted_values:
               arguments:
@@ -291,7 +270,7 @@ models:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
       - name: reason_code
-        description: Nullable revision or seller-response reason governed by event_type.
+        description: Nullable accepted revision or seller-response reason.
         tests:
           - accepted_values:
               arguments:
@@ -301,17 +280,21 @@ models:
                   - seller_withdrew
                   - time_based_reprice
       - name: request_id
-        description: Valuation-request foreign key carried by every physical offer delivery.
+        description: Canonical request foreign key for the accepted offer event.
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('int_canonical_valuation_requests')
+                field: request_id
       - name: schema_version
-        description: Lexical source payload version retained as text.
+        description: Supported lexical offer-event schema version.
         tests:
           - accepted_values:
               arguments:
                 values: ["1.0"]
       - name: seller_offer_amount
-        description: Raw positive seller offer in pricing_amount_unit on pricing-bearing events.
+        description: Raw positive seller offer on accepted pricing events.
         tests:
           - required_when:
               arguments:
@@ -320,16 +303,13 @@ models:
               arguments:
                 condition: "event_type not in ('issued', 'revised')"
       - name: seller_offer_amount_numeric
-        description: Exact numeric interpretation of the raw seller offer before normalization.
+        description: Exact numeric seller offer before unit normalization.
         tests:
           - required_when:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
-          - null_when:
-              arguments:
-                condition: "event_type not in ('issued', 'revised')"
       - name: seller_offer_usd
-        description: Exact seller offer normalized to USD without currency conversion.
+        description: Exact accepted seller offer normalized to USD.
         tests:
           - accepted_range:
               arguments:
@@ -339,7 +319,7 @@ models:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
       - name: seller_offer_usd_cents
-        description: Exact seller offer normalized to integer USD cents.
+        description: Exact accepted seller offer normalized to integer USD cents.
         tests:
           - accepted_range:
               arguments:
@@ -349,32 +329,32 @@ models:
               arguments:
                 condition: "event_type in ('issued', 'revised')"
       - name: source_batch_id
-        description: Physical delivery-batch lineage identifier with no business-key semantics.
+        description: Accepted delivery-batch lineage retained for auditability.
         tests:
           - not_null
       - name: source_event_id
-        description: Claimed immutable source event identifier included in replay comparison.
+        description: Claimed immutable event identifier on the accepted delivery.
         tests:
           - not_null
       - name: source_record_id
-        description: Source-system identifier for one immutable physical delivery.
+        description: Source identifier of the accepted physical offer delivery.
         tests:
           - not_null
       - name: source_system
-        description: Fixed producer namespace for offer-event deliveries.
+        description: Fixed offer-service producer namespace.
         tests:
           - accepted_values:
               arguments:
                 values: [offer_service]
       - name: source_updated_at
-        description: Raw offset-aware source-change timestamp retained for replay comparison.
+        description: Raw source-change timestamp of the accepted offer delivery.
         tests:
           - not_null
       - name: source_updated_at_ts
-        description: Parsed TIMESTAMP_TZ instant for the source-change timestamp.
+        description: Parsed source-change instant of the accepted offer delivery.
         tests:
           - not_null
       - name: synthetic_vin
-        description: Delivered synthetic vehicle trace key checked against the canonical request downstream.
+        description: Synthetic vehicle key already reconciled to the canonical request.
         tests:
           - not_null

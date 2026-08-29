@@ -1,0 +1,129 @@
+version: 2
+
+models:
+  - name: int_canonical_valuation_requests
+    description: >
+      Contains accepted valuation-request replay survivors only, with one
+      immutable canonical request delivery per request_id. It preserves all raw
+      provenance, parsed timestamps, normalized odometer values, and warning
+      flags needed by the candidate lifecycle exercise.
+    columns:
+      - name: delivery_sk
+        description: Accepted physical delivery selected as the canonical request survivor.
+        tests:
+          - not_null
+          - unique
+      - name: has_non_z_timestamp_representation
+        description: True when accepted evidence uses an explicit offset instead of a trailing Z.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: ingested_at
+        description: Raw arrival timestamp of the accepted request delivery.
+        tests:
+          - not_null
+      - name: ingested_at_ts
+        description: Parsed arrival instant of the accepted request delivery.
+        tests:
+          - not_null
+      - name: market_region
+        description: Frozen synthetic market region for the canonical request.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [great_lakes, mid_atlantic, mountain_west, pacific_coast]
+      - name: odometer_kilometers
+        description: Canonical request odometer normalized exactly to kilometers.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+      - name: odometer_miles
+        description: Canonical request odometer normalized exactly to miles.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+      - name: odometer_unit
+        description: Raw unit governing the canonical request odometer value.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [mi, km]
+      - name: odometer_unit_normalized
+        description: True when kilometer input required conversion to miles.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: odometer_value
+        description: Raw positive-integer odometer text on the canonical request.
+        tests:
+          - not_null
+      - name: odometer_value_numeric
+        description: Exact numeric interpretation of the canonical raw odometer.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+      - name: request_id
+        description: Unique canonical request identifier and future lifecycle grain.
+        tests:
+          - not_null
+          - unique
+      - name: schema_version
+        description: Supported lexical request schema version.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["1.0"]
+      - name: seller_id
+        description: Synthetic individual seller associated with the canonical request.
+        tests:
+          - not_null
+      - name: source_batch_id
+        description: Accepted delivery-batch lineage retained for auditability.
+        tests:
+          - not_null
+      - name: source_record_id
+        description: Source identifier of the accepted physical request delivery.
+        tests:
+          - not_null
+      - name: source_system
+        description: Fixed valuation-request producer namespace.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [valuation_portal]
+      - name: source_updated_at
+        description: Raw source-change timestamp of the accepted request delivery.
+        tests:
+          - not_null
+      - name: source_updated_at_ts
+        description: Parsed source-change instant of the accepted request delivery.
+        tests:
+          - not_null
+      - name: submission_channel
+        description: Frozen submission channel for the canonical request.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [web, mobile]
+      - name: submitted_at
+        description: Raw business timestamp when the canonical request was submitted.
+        tests:
+          - not_null
+      - name: submitted_at_ts
+        description: Parsed business instant when the canonical request was submitted.
+        tests:
+          - not_null
+      - name: synthetic_vin
+        description: Authoritative synthetic vehicle trace key for the canonical request.
+        tests:
+          - not_null

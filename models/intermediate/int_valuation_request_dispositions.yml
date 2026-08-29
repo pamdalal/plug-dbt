@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: int_valuation_request_dispositions
+    description: >
+      Emits exactly one runtime-derived disposition per physical valuation
+      request delivery. Supported rows replay-group by request_id, compare the
+      frozen immutable payload by delivered text and parsed timestamp instant,
+      and choose the earliest ingested_at and source_record_id survivor.
+    columns:
+      - name: delivery_sk
+        description: Physical valuation-request delivery key receiving one disposition.
+        tests:
+          - not_null
+          - unique
+      - name: disposition
+        description: Exhaustive accepted, duplicate, or quarantined classification.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [accepted, duplicate, quarantined]
+      - name: disposition_reason
+        description: Nullable runtime reason explaining duplicate or quarantine handling.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - exact_replay
+                  - immutable_key_conflict
+                  - schema_validation_error
+                  - unsupported_schema_version
+      - name: request_id
+        description: Request identity carried by the physical delivery.
+        tests:
+          - not_null
+      - name: source
+        description: Stable source name for the common disposition interface.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [raw_valuation_requests]
+      - name: survivor_delivery_sk
+        description: Accepted earliest-delivery pointer populated only for exact replay duplicates.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_valuation_requests')
+                field: delivery_sk

@@ -1,0 +1,241 @@
+version: 2
+
+models:
+  - name: stg_marketplace_events
+    description: >
+      Preserves one row per physical marketplace-event delivery at the
+      delivery_sk grain without replay selection or auction reconstruction.
+      Every raw field remains available alongside parsed TIMESTAMP_TZ values,
+      exact event-sequence and amount derivatives, normalized USD and USD-cent
+      amounts, and representation flags. Conditional nulls remain source
+      evidence. Incremental runs append only parsed ingested_at instants
+      strictly greater than the current target maximum.
+    columns:
+      - name: amount_role
+        description: Conditional role identifying reserve, bid, or confirmed dealer price amounts.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [reserve, bid, confirmed_dealer_price]
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - null_when:
+              arguments:
+                condition: "event_type not in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: auction_id
+        description: Identifier for the request's only supported listing and auction exposure.
+        tests:
+          - not_null
+      - name: auction_result_code
+        description: Conditional close result for awarded, no-bid, or reserve-not-met auctions.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [awarded, no_bid, reserve_not_met]
+          - required_when:
+              arguments:
+                condition: "event_type = 'auction_closed'"
+          - null_when:
+              arguments:
+                condition: "event_type <> 'auction_closed'"
+      - name: bid_id
+        description: Conditional bid identifier on bids, awarded closes, and sale confirmations.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('bid_submitted', 'sale_confirmed') or (event_type = 'auction_closed' and auction_result_code = 'awarded')"
+      - name: currency_code
+        description: Conditional currency for reserve, bid, and confirmed dealer price amounts.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [USD]
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - null_when:
+              arguments:
+                condition: "event_type not in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: dealer_id
+        description: Conditional dealer identifier on bids, awarded closes, and sale confirmations.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('bid_submitted', 'sale_confirmed') or (event_type = 'auction_closed' and auction_result_code = 'awarded')"
+      - name: delivery_sk
+        description: Deterministic physical-delivery key namespaced to raw marketplace events.
+        tests:
+          - not_null
+          - unique
+      - name: event_amount
+        description: Raw positive monetary text for reserve, bid, or confirmed dealer price events.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - null_when:
+              arguments:
+                condition: "event_type not in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_numeric
+        description: Exact numeric interpretation of event_amount before unit normalization.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - null_when:
+              arguments:
+                condition: "event_type not in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_unit
+        description: Conditional raw unit governing event_amount.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [usd]
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+          - null_when:
+              arguments:
+                condition: "event_type not in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_unit_normalized
+        description: False because supported marketplace amounts are already delivered in USD.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [false]
+                quote: false
+      - name: event_amount_usd
+        description: Exact event amount normalized to USD without currency conversion.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_amount_usd_cents
+        description: Exact event amount normalized to integer USD cents.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+          - required_when:
+              arguments:
+                condition: "event_type in ('listing_created', 'bid_submitted', 'sale_confirmed')"
+      - name: event_at
+        description: Raw offset-aware business timestamp for the immutable marketplace event.
+        tests:
+          - not_null
+      - name: event_at_ts
+        description: Parsed TIMESTAMP_TZ instant for event_at.
+        tests:
+          - not_null
+      - name: event_sequence
+        description: Raw positive event position within one auction.
+        tests:
+          - not_null
+      - name: event_sequence_numeric
+        description: Exact integer interpretation of event_sequence.
+        tests:
+          - accepted_range:
+              arguments:
+                inclusive: false
+                min_value: 0
+      - name: event_type
+        description: Closed marketplace event vocabulary from listing through operational terminal.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - listing_created
+                  - bid_submitted
+                  - auction_closed
+                  - sale_confirmed
+                  - transaction_completed
+                  - transaction_cancelled
+      - name: has_non_z_timestamp_representation
+        description: True when any delivered timestamp uses an explicit offset instead of a trailing Z.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: ingested_at
+        description: Raw offset-aware warehouse-arrival timestamp used as the incremental watermark.
+        tests:
+          - not_null
+      - name: ingested_at_ts
+        description: Parsed TIMESTAMP_TZ instant for the raw ingestion timestamp.
+        tests:
+          - not_null
+      - name: offer_id
+        description: Offer-service foreign key connecting the marketplace path to a seller acceptance.
+        tests:
+          - not_null
+      - name: request_id
+        description: Valuation-request foreign key carried by every physical marketplace delivery.
+        tests:
+          - not_null
+      - name: scheduled_close_at
+        description: Raw contractual auction deadline carried only by listing creation.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type = 'listing_created'"
+          - null_when:
+              arguments:
+                condition: "event_type <> 'listing_created'"
+      - name: scheduled_close_at_ts
+        description: Parsed TIMESTAMP_TZ instant for the listing's scheduled auction close.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type = 'listing_created'"
+          - null_when:
+              arguments:
+                condition: "event_type <> 'listing_created'"
+      - name: schema_version
+        description: Lexical source payload version retained as text.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["1.0"]
+      - name: source_batch_id
+        description: Physical delivery-batch lineage identifier with no business-key semantics.
+        tests:
+          - not_null
+      - name: source_event_id
+        description: Claimed immutable source event identifier included in replay comparison.
+        tests:
+          - not_null
+      - name: source_record_id
+        description: Source-system identifier for one immutable physical delivery.
+        tests:
+          - not_null
+      - name: source_system
+        description: Fixed producer namespace for marketplace-event deliveries.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [dealer_marketplace]
+      - name: source_updated_at
+        description: Raw offset-aware source-change timestamp retained for replay comparison.
+        tests:
+          - not_null
+      - name: source_updated_at_ts
+        description: Parsed TIMESTAMP_TZ instant for the source-change timestamp.
+        tests:
+          - not_null
+      - name: synthetic_vin
+        description: Delivered synthetic vehicle trace key checked against the canonical request downstream.
+        tests:
+          - not_null
+      - name: transaction_id
+        description: Conditional transaction identifier on sale confirmation and operational terminal events.
+        tests:
+          - required_when:
+              arguments:
+                condition: "event_type in ('sale_confirmed', 'transaction_completed', 'transaction_cancelled')"

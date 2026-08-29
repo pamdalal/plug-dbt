@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: int_delivery_dispositions
+    description: >
+      Provides the common one-row-per-physical-delivery disposition interface
+      across all four sources. Warnings and normalization flags remain on
+      staging/canonical inputs and do not alter accepted, duplicate, or
+      quarantined classification.
+    columns:
+      - name: delivery_sk
+        description: Globally namespaced physical-delivery key across the four sources.
+        tests:
+          - not_null
+          - unique
+      - name: disposition
+        description: Exhaustive and mutually exclusive delivery classification.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [accepted, duplicate, quarantined]
+      - name: disposition_reason
+        description: Nullable source-specific reason for duplicate or quarantine handling.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - assessment_unavailable_at_feature_cutoff
+                  - exact_replay
+                  - identity_mismatch
+                  - immutable_key_conflict
+                  - invalid_marketplace_transition
+                  - orphaned_offer
+                  - orphaned_request
+                  - schema_validation_error
+                  - unsupported_schema_version
+      - name: request_id
+        description: Request identity carried by the physical delivery.
+        tests:
+          - not_null
+      - name: source
+        description: Source relation from which the physical delivery originated.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - raw_marketplace_events
+                  - raw_offer_events
+                  - raw_valuation_requests
+                  - raw_vehicle_assessments
+      - name: survivor_delivery_sk
+        description: Accepted earliest-delivery pointer populated only for exact replay duplicates.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('int_delivery_dispositions')
+                field: delivery_sk
