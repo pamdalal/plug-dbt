@@ -1,0 +1,393 @@
+version: 2
+
+models:
+  - name: stg_offer_events
+    description: >-
+      Preserves one row per physical offer-event delivery from raw_offer_events.
+      The model retains every loaded seed column and adds explicit timestamp,
+      version, sequence, USD, and dollar-cent derivatives. Pricing context is
+      nullable outside issued and revised lifecycle events. Incremental runs
+      append only deliveries whose ingested_at timestamp is strictly greater
+      than the maximum staged ingested_at_ts; the reverse completeness test
+      exposes equal or earlier deliveries skipped by that boundary.
+    columns:
+      - name: assessment_id_used
+        description: Vehicle-assessment identifier used for issued or revised offer pricing.
+        tests:
+          - not_empty_string
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - relationships:
+              arguments:
+                to: ref('stg_vehicle_assessments')
+                field: assessment_id
+              config:
+                where: "assessment_id_used is not null"
+
+      - name: assessment_version_used
+        description: Raw assessment version used by the pricing evaluation.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: assessment_version_used_num
+        description: Assessment version explicitly cast to NUMBER(10,0).
+        tests:
+          - not_null:
+              config:
+                where: "assessment_version_used is not null"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: event_at
+        description: Loaded business timestamp when the offer lifecycle event occurred.
+        tests:
+          - not_null
+
+      - name: event_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of event_at.
+        tests:
+          - not_null:
+              config:
+                where: "event_at is not null"
+
+      - name: event_sequence
+        description: Raw source sequence of the event within its offer lifecycle.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: event_sequence_num
+        description: Event sequence explicitly cast to NUMBER(10,0).
+        tests:
+          - not_null:
+              config:
+                where: "event_sequence is not null"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: event_type
+        description: Source-defined offer lifecycle event type.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - accepted
+                  - declined
+                  - expired
+                  - issued
+                  - revised
+                  - withdrawn
+
+      - name: expires_at
+        description: Loaded offer expiration timestamp present for issued and revised events.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+
+      - name: expires_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of expires_at.
+        tests:
+          - not_null:
+              config:
+                where: "expires_at is not null"
+
+      - name: feature_cutoff_at
+        description: Loaded feature-data cutoff timestamp used by the pricing evaluation.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+
+      - name: feature_cutoff_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of feature_cutoff_at.
+        tests:
+          - not_null:
+              config:
+                where: "feature_cutoff_at is not null"
+
+      - name: ingested_at
+        description: Loaded source ingestion timestamp retained without replacement.
+        tests:
+          - not_null
+
+      - name: ingested_at_ts
+        description: Explicit TIMESTAMP_NTZ ordering field used by the incremental boundary.
+        tests:
+          - not_null:
+              config:
+                where: "ingested_at is not null"
+
+      - name: net_policy_adjustment_amount
+        description: Raw signed pricing-policy adjustment in pricing_amount_unit.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+
+      - name: net_policy_adjustment_amount_cents
+        description: Signed pricing-policy adjustment normalized to whole US dollar cents.
+        tests:
+          - not_null:
+              config:
+                where: "net_policy_adjustment_amount is not null"
+
+      - name: net_policy_adjustment_amount_usd
+        description: Signed pricing-policy adjustment normalized to US dollars.
+        tests:
+          - not_null:
+              config:
+                where: "net_policy_adjustment_amount is not null"
+
+      - name: offer_id
+        description: Business identifier shared by lifecycle events for one offer.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: offer_version
+        description: Raw source version of the offer terms associated with the event.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: offer_version_num
+        description: Offer version explicitly cast to NUMBER(10,0).
+        tests:
+          - not_null:
+              config:
+                where: "offer_version is not null"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: predicted_wholesale_value_amount
+        description: Raw nonnegative predicted wholesale value in pricing_amount_unit.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: predicted_wholesale_value_amount_cents
+        description: Predicted wholesale value normalized to whole US dollar cents.
+        tests:
+          - not_null:
+              config:
+                where: "predicted_wholesale_value_amount is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: predicted_wholesale_value_amount_usd
+        description: Predicted wholesale value normalized to US dollars.
+        tests:
+          - not_null:
+              config:
+                where: "predicted_wholesale_value_amount is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: pricing_amount_unit
+        description: Unit supplied for all raw pricing amounts on the event.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - accepted_values:
+              arguments:
+                values:
+                  - usd
+                  - usd_cent
+
+      - name: pricing_currency_code
+        description: Currency code supplied for pricing amounts when pricing context is present.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - accepted_values:
+              arguments:
+                values:
+                  - USD
+
+      - name: pricing_evaluated_at
+        description: Loaded timestamp when the pricing evaluation completed.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+
+      - name: pricing_evaluated_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of pricing_evaluated_at.
+        tests:
+          - not_null:
+              config:
+                where: "pricing_evaluated_at is not null"
+
+      - name: pricing_evaluation_id
+        description: Identifier for the pricing evaluation that produced issued or revised terms.
+        tests:
+          - not_empty_string
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+
+      - name: pricing_model_version
+        description: Source-defined pricing model version used by the evaluation.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - accepted_values:
+              arguments:
+                values:
+                  - model_baseline
+                  - model_challenger
+
+      - name: pricing_policy_version
+        description: Source-defined pricing policy version used by the evaluation.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - accepted_values:
+              arguments:
+                values:
+                  - policy_v1
+
+      - name: reason_code
+        description: Source reason for revised, declined, or withdrawn lifecycle events.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('revised', 'declined', 'withdrawn')"
+          - accepted_values:
+              arguments:
+                values:
+                  - assessment_correction
+                  - seller_declined
+                  - seller_withdrew
+                  - time_based_reprice
+
+      - name: request_id
+        description: Valuation-request identifier associated with the offer lifecycle.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_valuation_requests')
+                field: request_id
+
+      - name: schema_version
+        description: Raw source payload schema version retained from the physical delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+
+      - name: schema_version_num
+        description: Source schema version explicitly cast to NUMBER(10,2).
+        tests:
+          - not_null:
+              config:
+                where: "schema_version is not null"
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+
+      - name: seller_offer_amount
+        description: Raw nonnegative seller-facing offer amount in pricing_amount_unit.
+        tests:
+          - not_null:
+              config:
+                where: "event_type in ('issued', 'revised')"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: seller_offer_amount_cents
+        description: Seller-facing offer amount normalized to whole US dollar cents.
+        tests:
+          - not_null:
+              config:
+                where: "seller_offer_amount is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: seller_offer_amount_usd
+        description: Seller-facing offer amount normalized to US dollars.
+        tests:
+          - not_null:
+              config:
+                where: "seller_offer_amount is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: source_batch_id
+        description: Identifier for the source delivery batch that contained the record.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: source_event_id
+        description: Source event identifier retained even when repeated across physical deliveries.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: source_record_id
+        description: Unique physical-delivery key supplied by the source fixture.
+        tests:
+          - not_null
+          - unique
+          - not_empty_string
+
+      - name: source_system
+        description: Upstream system that emitted the offer-event delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - offer_service
+
+      - name: source_updated_at
+        description: Loaded source timestamp for the upstream record update.
+        tests:
+          - not_null
+
+      - name: source_updated_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of source_updated_at.
+        tests:
+          - not_null:
+              config:
+                where: "source_updated_at is not null"
+
+      - name: synthetic_vin
+        description: Synthetic VIN-like source observation retained as evidence, not asserted as a universal VIN.
+        tests:
+          - not_null
+          - not_empty_string

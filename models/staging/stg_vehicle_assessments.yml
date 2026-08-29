@@ -1,0 +1,340 @@
+version: 2
+
+models:
+  - name: stg_vehicle_assessments
+    description: >-
+      Preserves one row per physical vehicle-assessment delivery from
+      raw_vehicle_assessments. The model retains every loaded seed column and
+      adds explicit timestamp, schema-version, assessment-version, model-year,
+      battery percentage, and odometer-unit derivatives. Observation fields
+      are required only for usable assessments, while the legacy 0.9 delivery
+      intentionally retains its incomplete payload. Incremental runs append
+      only deliveries whose ingested_at timestamp is strictly greater than the
+      maximum staged ingested_at_ts.
+    columns:
+      - name: assessed_odometer_kilometers
+        description: Assessment odometer observation normalized to kilometers.
+        tests:
+          - not_null:
+              config:
+                where: "assessed_odometer_value is not null and assessed_odometer_unit in ('mi', 'km')"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: assessed_odometer_miles
+        description: Assessment odometer observation normalized to miles.
+        tests:
+          - not_null:
+              config:
+                where: "assessed_odometer_value is not null and assessed_odometer_unit in ('mi', 'km')"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: assessed_odometer_unit
+        description: Unit supplied with the assessment odometer observation.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - km
+                  - mi
+
+      - name: assessed_odometer_value
+        description: Raw loaded assessment odometer observation.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: assessed_odometer_value_num
+        description: Assessment odometer observation explicitly cast to NUMBER(18,2).
+        tests:
+          - not_null:
+              config:
+                where: "assessed_odometer_value is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: assessment_completed_at
+        description: Loaded timestamp when source assessment processing completed.
+        tests:
+          - not_null:
+              config:
+                where: "schema_version = 1"
+
+      - name: assessment_completed_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of assessment_completed_at.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_completed_at is not null"
+
+      - name: assessment_id
+        description: Business identifier for an assessment across its delivered versions.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: assessment_method_version
+        description: Source-defined method version used to produce the assessment.
+        tests:
+          - not_null:
+              config:
+                where: "schema_version = 1"
+          - accepted_values:
+              arguments:
+                values:
+                  - method_baseline
+                  - method_current
+
+      - name: assessment_status
+        description: Source-defined usability status for the assessment delivery.
+        tests:
+          - not_null:
+              config:
+                where: "schema_version = 1"
+          - accepted_values:
+              arguments:
+                values:
+                  - failed
+                  - usable
+
+      - name: assessment_version
+        description: Raw version of the assessment payload for its assessment_id.
+        tests:
+          - not_null:
+              config:
+                where: "schema_version = 1"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: assessment_version_num
+        description: Assessment version explicitly cast to NUMBER(10,0).
+        tests:
+          - not_null:
+              config:
+                where: "assessment_version is not null"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: available_to_model_at
+        description: Loaded timestamp when the assessment became available to downstream pricing.
+        tests:
+          - not_null:
+              config:
+                where: "schema_version = 1"
+
+      - name: available_to_model_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of available_to_model_at.
+        tests:
+          - not_null:
+              config:
+                where: "available_to_model_at is not null"
+
+      - name: battery_soh_percent
+        description: Battery state-of-health explicitly normalized to percentage points.
+        tests:
+          - not_null:
+              config:
+                where: "battery_soh_value is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+
+      - name: battery_soh_unit
+        description: Unit supplied with the battery state-of-health observation.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - percent
+
+      - name: battery_soh_value
+        description: Raw loaded battery state-of-health observation.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+
+      - name: condition_grade
+        description: Source-defined overall condition grade for a usable assessment.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - average
+                  - clean
+                  - rough
+
+      - name: ingested_at
+        description: Loaded source ingestion timestamp retained without replacement.
+        tests:
+          - not_null
+
+      - name: ingested_at_ts
+        description: Explicit TIMESTAMP_NTZ ordering field used by the incremental boundary.
+        tests:
+          - not_null:
+              config:
+                where: "ingested_at is not null"
+
+      - name: model_year
+        description: Raw source model-year observation for a usable assessment.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 1886
+                max_value: 2100
+
+      - name: model_year_num
+        description: Model year explicitly cast to NUMBER(4,0).
+        tests:
+          - not_null:
+              config:
+                where: "model_year is not null"
+          - accepted_range:
+              arguments:
+                min_value: 1886
+                max_value: 2100
+
+      - name: observed_at
+        description: Loaded timestamp when the usable vehicle observations were collected.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+
+      - name: observed_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of observed_at.
+        tests:
+          - not_null:
+              config:
+                where: "observed_at is not null"
+
+      - name: request_id
+        description: Valuation-request identifier that initiated the assessment.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_valuation_requests')
+                field: request_id
+
+      - name: schema_version
+        description: Raw source payload schema version retained from the physical delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 0.9
+                  - 1
+
+      - name: schema_version_num
+        description: Source schema version explicitly cast to NUMBER(10,2).
+        tests:
+          - not_null:
+              config:
+                where: "schema_version is not null"
+          - accepted_values:
+              arguments:
+                values:
+                  - 0.9
+                  - 1
+
+      - name: source_batch_id
+        description: Identifier for the source delivery batch that contained the record.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: source_record_id
+        description: Unique physical-delivery key supplied by the source fixture.
+        tests:
+          - not_null
+          - unique
+          - not_empty_string
+
+      - name: source_system
+        description: Upstream system that emitted the assessment delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - vehicle_assessment
+
+      - name: source_updated_at
+        description: Loaded source timestamp for the upstream record update.
+        tests:
+          - not_null
+
+      - name: source_updated_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of source_updated_at.
+        tests:
+          - not_null:
+              config:
+                where: "source_updated_at is not null"
+
+      - name: synthetic_vin
+        description: Synthetic VIN-like source observation retained as evidence, not asserted as a universal VIN.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: vehicle_model_family
+        description: Source-defined vehicle model family for a usable assessment.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - chevrolet_bolt_ev
+                  - ford_f150_lightning
+                  - ford_mustang_mach_e
+                  - hyundai_ioniq_5
+                  - nissan_leaf
+                  - tesla_model_3
+                  - tesla_model_y
+
+      - name: vehicle_segment
+        description: Source-defined vehicle segment for a usable assessment.
+        tests:
+          - not_null:
+              config:
+                where: "assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - crossover
+                  - hatchback
+                  - pickup
+                  - sedan

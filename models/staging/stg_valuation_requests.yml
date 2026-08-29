@@ -1,0 +1,167 @@
+version: 2
+
+models:
+  - name: stg_valuation_requests
+    description: >-
+      Preserves one row per physical valuation-request delivery from
+      raw_valuation_requests. The model retains every loaded seed column and
+      adds explicit timestamp, numeric odometer, mile, and kilometer
+      derivatives. Incremental runs append only deliveries whose ingested_at
+      timestamp is strictly greater than the maximum staged ingested_at_ts;
+      equal or earlier watermarks remain visible through the reverse
+      completeness test.
+    columns:
+      - name: ingested_at
+        description: Loaded source ingestion timestamp retained without replacement.
+        tests:
+          - not_null
+
+      - name: ingested_at_ts
+        description: Explicit TIMESTAMP_NTZ ordering field used by the incremental boundary.
+        tests:
+          - not_null:
+              config:
+                where: "ingested_at is not null"
+
+      - name: market_region
+        description: Source-defined regional market grouping for the valuation request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - great_lakes
+                  - mid_atlantic
+                  - mountain_west
+                  - pacific_coast
+
+      - name: odometer_kilometers
+        description: Odometer observation normalized to kilometers without replacing the raw value or unit.
+        tests:
+          - not_null:
+              config:
+                where: "odometer_value is not null and odometer_unit in ('mi', 'km')"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: odometer_miles
+        description: Odometer observation normalized to miles without replacing the raw value or unit.
+        tests:
+          - not_null:
+              config:
+                where: "odometer_value is not null and odometer_unit in ('mi', 'km')"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: odometer_unit
+        description: Unit supplied with the raw odometer observation.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - km
+                  - mi
+
+      - name: odometer_value
+        description: Raw loaded odometer observation at the seed type boundary.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: odometer_value_num
+        description: Odometer observation explicitly cast to NUMBER(18,2).
+        tests:
+          - not_null:
+              config:
+                where: "odometer_value is not null"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: request_id
+        description: Business identifier linking the delivered request to related lifecycle records.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: schema_version
+        description: Source payload schema version retained from the physical delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+
+      - name: seller_id
+        description: Source-system identifier for the seller that submitted the request.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: source_batch_id
+        description: Identifier for the source delivery batch that contained the record.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: source_record_id
+        description: Unique physical-delivery key supplied by the source fixture.
+        tests:
+          - not_null
+          - unique
+          - not_empty_string
+
+      - name: source_system
+        description: Upstream system that emitted the valuation-request delivery.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - valuation_portal
+
+      - name: source_updated_at
+        description: Loaded source timestamp for the upstream record update.
+        tests:
+          - not_null
+
+      - name: source_updated_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of source_updated_at.
+        tests:
+          - not_null:
+              config:
+                where: "source_updated_at is not null"
+
+      - name: submission_channel
+        description: Channel through which the seller submitted the valuation request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - mobile
+                  - web
+
+      - name: submitted_at
+        description: Loaded business timestamp when the seller submitted the request.
+        tests:
+          - not_null
+
+      - name: submitted_at_ts
+        description: Explicit TIMESTAMP_NTZ derivative of submitted_at.
+        tests:
+          - not_null:
+              config:
+                where: "submitted_at is not null"
+
+      - name: synthetic_vin
+        description: Synthetic VIN-like source observation retained as evidence, not asserted as a universal VIN.
+        tests:
+          - not_null
+          - not_empty_string
