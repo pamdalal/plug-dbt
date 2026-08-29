@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: <staging_model_name>
+    description: >-
+      <purpose>. One row per <physical_delivery_grain>. Incrementally appends
+      deliveries where <watermark> is strictly greater than the maximum staged
+      watermark.
+    columns:
+      - name: <alphabetically_first_output_column>
+        description: <meaningful_semantic_description>
+        data_tests:
+          - <contract_backed_test>
+
+      - name: <delivery_sk>
+        description: Deterministic key for one physical source delivery.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: <watermark>
+        description: Immutable source ingestion timestamp used as the incremental boundary.
+        data_tests:
+          - not_null

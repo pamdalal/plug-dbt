@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Staging Model"
+  short_description: "Create tested dbt staging models from any source"
+  default_prompt: "Use $create-staging-model to create a tested dbt staging model from this Snowflake source or local seed."

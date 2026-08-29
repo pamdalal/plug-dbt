@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: <source_name>
+    database: <database_name>
+    schema: <schema_name>
+    tables:
+      - name: <table_name>
+        identifier: <physical_identifier_if_different>
+        description: <source_table_description>
+        columns:
+          - name: <important_source_column>
+            description: <source_column_description>
