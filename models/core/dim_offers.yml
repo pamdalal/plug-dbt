@@ -1,0 +1,220 @@
+version: 2
+
+models:
+  - name: dim_offers
+    description: >-
+      Consumer-facing Type 1 current-state offer dimension with one row per
+      offer_id. The current lifecycle event is the greatest event sequence,
+      with replay ties broken by event timestamp, ingestion timestamp, and
+      source record identifier in descending order. Pricing fields come from
+      the greatest issued or revised offer version, with the same deterministic
+      event and replay tie-breaks, so the latest pricing terms remain available
+      after terminal lifecycle events. offer_issued_at is the earliest issued
+      event timestamp. All pricing fields are required for an offer with an
+      issued or revised event; current_reason_code remains null when the
+      selected lifecycle event has no source reason.
+    columns:
+      - name: assessment_id_used
+        description: Assessment identifier used by the latest issued or revised pricing event.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_vehicle_assessments')
+                field: assessment_id
+
+      - name: assessment_version_used
+        description: Explicit numeric assessment version used by the latest pricing event.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: current_event_at
+        description: Explicit timestamp of the deterministically selected current lifecycle event.
+        tests:
+          - not_null
+
+      - name: current_event_sequence
+        description: Explicit numeric sequence of the current lifecycle event.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: current_event_type
+        description: Source-defined lifecycle type of the current event.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - accepted
+                  - declined
+                  - expired
+                  - issued
+                  - revised
+                  - withdrawn
+
+      - name: current_offer_version
+        description: Explicit numeric offer version reported by the current lifecycle event.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: current_reason_code
+        description: >-
+          Source reason on the current lifecycle event; null when that event
+          type does not supply a reason.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - assessment_correction
+                  - seller_declined
+                  - seller_withdrew
+                  - time_based_reprice
+
+      - name: current_source_event_id
+        description: Source event identifier of the current lifecycle event.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: current_source_record_id
+        description: Physical delivery identifier selected for the current lifecycle event.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_offer_events')
+                field: source_record_id
+
+      - name: expires_at
+        description: Explicit expiration timestamp from the latest issued or revised pricing event.
+        tests:
+          - not_null
+
+      - name: latest_pricing_event_at
+        description: Explicit timestamp of the latest issued or revised pricing event.
+        tests:
+          - not_null
+
+      - name: latest_pricing_event_type
+        description: Lifecycle type that supplied the carried-forward pricing terms.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - issued
+                  - revised
+
+      - name: latest_pricing_source_event_id
+        description: Source event identifier of the latest pricing event.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: latest_pricing_source_record_id
+        description: Physical delivery identifier selected for the latest pricing event.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_offer_events')
+                field: source_record_id
+
+      - name: net_policy_adjustment_amount_cents
+        description: >-
+          Signed whole-cent policy adjustment from the latest pricing event;
+          negative values are valid and are not treated as missing.
+        tests:
+          - not_null
+
+      - name: offer_id
+        description: Business identifier and candidate key for one current-state offer.
+        tests:
+          - not_null
+          - unique
+          - not_empty_string
+
+      - name: offer_issued_at
+        description: Earliest explicit event timestamp where the offer lifecycle was issued.
+        tests:
+          - not_null
+
+      - name: predicted_wholesale_value_amount_cents
+        description: Nonnegative whole-cent predicted wholesale value from the latest pricing event.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: pricing_currency_code
+        description: Currency code associated with the carried-forward pricing amounts.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - USD
+
+      - name: pricing_evaluation_id
+        description: Pricing evaluation identifier that produced the latest pricing terms.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: pricing_model_version
+        description: Source-defined pricing model version used by the latest pricing evaluation.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - model_baseline
+                  - model_challenger
+
+      - name: pricing_policy_version
+        description: Source-defined pricing policy version used by the latest pricing evaluation.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - policy_v1
+
+      - name: request_id
+        description: Stable valuation-request identifier associated with the offer.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_valuation_requests')
+                field: request_id
+
+      - name: seller_offer_amount_cents
+        description: Nonnegative whole-cent seller-facing amount from the latest pricing event.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: synthetic_vin
+        description: >-
+          Stable synthetic VIN-like observation associated with the offer;
+          retained as evidence rather than asserted as a universal VIN.
+        tests:
+          - not_null
+          - not_empty_string
