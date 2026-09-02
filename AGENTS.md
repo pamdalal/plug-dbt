@@ -40,7 +40,15 @@ Stop thresholds have no standing exception. Narrow or defer the outcome without 
 
 ## Validate and deliver
 
-Run and report focused validation for the affected dbt graph under the applicable skills. Stop on a failing required check. If a prerequisite is unavailable, run the available checks and report the exact blocker without claiming success.
+Before push or PR creation, run and report the minimum focused validation for the affected dbt graph:
+
+1. Run `dbt parse`.
+2. Use `dbt ls --select "<changed-nodes>" --output name` to verify the intended selector.
+3. Run `dbt build --select "<changed-nodes>"` to build the changed nodes and execute their selected tests.
+
+Before the first warehouse command in a stable session, confirm that the resolved target is a development database and schema. Reuse that confirmation while the session, profile, and target environment remain unchanged.
+
+Expand validation only when the change requires it: include missing parents, include bounded descendants for interface changes, use `dbt show` or profiling for semantic assumptions not covered by tests, and inspect logs or compiled artifacts after a failure. A semantic change after successful validation requires rerunning the affected checks. Stop on a failing required check. If a prerequisite is unavailable, run the available checks and report the exact blocker without claiming success.
 
 For explicitly authorized repository implementation, commit on the dedicated branch, push only that branch, and open one pull request against the verified base when Git, remotes, authentication, and PR tooling permit. Multiple focused commits are allowed. Report the exact blocker for any unavailable delivery step. Never merge or enable auto-merge.
 
