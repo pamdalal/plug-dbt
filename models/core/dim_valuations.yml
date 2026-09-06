@@ -1,0 +1,326 @@
+version: 2
+
+models:
+  - name: dim_valuations
+    description: >-
+      Consumer-facing Type 1 current-state valuation dimension with one row
+      per request_id. Every valuation request is retained, including requests
+      without a delivered assessment. The current request is selected by
+      source update timestamp, ingestion timestamp, and source record
+      identifier in descending order. The current assessment is selected by
+      source update timestamp, assessment version, ingestion timestamp, and
+      source record identifier in descending order. Request synthetic_vin is
+      authoritative for this contract; assessment VIN-like observations are
+      not joined or exposed. Assessment lifecycle fields remain available for
+      failed assessments, while observation fields are null for failed or
+      undelivered assessments.
+    columns:
+      - name: request_id
+        description: Business identifier and unique key for one current-state valuation request.
+        tests:
+          - not_null
+          - unique
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_valuation_requests')
+                field: request_id
+
+      - name: synthetic_vin
+        description: Authoritative synthetic VIN-like observation from the current request delivery.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: seller_id
+        description: Source-system identifier for the seller that submitted the current request.
+        tests:
+          - not_null
+          - not_empty_string
+
+      - name: submission_channel
+        description: Channel through which the seller submitted the current request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - mobile
+                  - web
+
+      - name: market_region
+        description: Source-defined regional market grouping for the current request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - great_lakes
+                  - mid_atlantic
+                  - mountain_west
+                  - pacific_coast
+
+      - name: submitted_at
+        description: Explicit TIMESTAMP_NTZ when the seller submitted the current request.
+        tests:
+          - not_null
+
+      - name: submitted_odometer_value
+        description: Current request odometer observation explicitly typed as NUMBER(18,2).
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: submitted_odometer_unit
+        description: Unit supplied with the current request odometer observation.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - km
+                  - mi
+
+      - name: submitted_odometer_miles
+        description: Current request odometer observation normalized to miles.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: submitted_odometer_kilometers
+        description: Current request odometer observation normalized to kilometers.
+        tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: current_request_source_updated_at
+        description: Explicit TIMESTAMP_NTZ used as the primary current-request ordering field.
+        tests:
+          - not_null
+
+      - name: current_request_source_record_id
+        description: Physical delivery identifier selected as the current request record.
+        tests:
+          - not_null
+          - not_empty_string
+          - relationships:
+              arguments:
+                to: ref('stg_valuation_requests')
+                field: source_record_id
+              config:
+                where: "current_request_source_record_id is not null"
+
+      - name: current_assessment_id
+        description: Business identifier of the current delivered assessment, null when none exists.
+        tests:
+          - not_empty_string
+          - not_null:
+              config:
+                where: "current_assessment_source_record_id is not null"
+          - relationships:
+              arguments:
+                to: ref('stg_vehicle_assessments')
+                field: assessment_id
+              config:
+                where: "current_assessment_id is not null"
+
+      - name: current_assessment_schema_version
+        description: Explicit numeric schema version of the current assessment delivery.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_id is not null"
+          - accepted_values:
+              arguments:
+                values:
+                  - 0.9
+                  - 1
+
+      - name: current_assessment_version
+        description: Explicit numeric assessment version within the current assessment lifecycle.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_schema_version = 1"
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+      - name: current_assessment_status
+        description: Source-defined usability status of the current assessment delivery.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_schema_version = 1"
+          - accepted_values:
+              arguments:
+                values:
+                  - failed
+                  - usable
+
+      - name: current_assessment_method_version
+        description: Source-defined method version used to produce the current assessment.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_schema_version = 1"
+          - accepted_values:
+              arguments:
+                values:
+                  - method_baseline
+                  - method_current
+
+      - name: vehicle_model_family
+        description: Source-defined vehicle model family from a usable current assessment.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - chevrolet_bolt_ev
+                  - ford_f150_lightning
+                  - ford_mustang_mach_e
+                  - hyundai_ioniq_5
+                  - nissan_leaf
+                  - tesla_model_3
+                  - tesla_model_y
+
+      - name: vehicle_segment
+        description: Source-defined vehicle segment from a usable current assessment.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - crossover
+                  - hatchback
+                  - pickup
+                  - sedan
+
+      - name: model_year
+        description: Explicit numeric model year from a usable current assessment.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 1886
+                max_value: 2100
+
+      - name: assessed_odometer_value
+        description: Current assessment odometer observation explicitly typed as NUMBER(18,2).
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: assessed_odometer_unit
+        description: Unit supplied with the usable current assessment odometer observation.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - km
+                  - mi
+
+      - name: assessed_odometer_miles
+        description: Current assessment odometer observation normalized to miles.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: assessed_odometer_kilometers
+        description: Current assessment odometer observation normalized to kilometers.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: battery_soh_percent
+        description: Battery state-of-health from a usable assessment in percentage points.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+
+      - name: condition_grade
+        description: Source-defined overall condition grade from a usable current assessment.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+          - accepted_values:
+              arguments:
+                values:
+                  - average
+                  - clean
+                  - rough
+
+      - name: observed_at
+        description: Explicit TIMESTAMP_NTZ when usable vehicle observations were collected.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_status = 'usable'"
+
+      - name: assessment_completed_at
+        description: Explicit TIMESTAMP_NTZ when current assessment processing completed.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_schema_version = 1"
+
+      - name: available_to_model_at
+        description: Explicit TIMESTAMP_NTZ when the current assessment became available downstream.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_schema_version = 1"
+
+      - name: current_assessment_source_updated_at
+        description: Explicit TIMESTAMP_NTZ used as the primary current-assessment ordering field.
+        tests:
+          - not_null:
+              config:
+                where: "current_assessment_source_record_id is not null"
+      - name: current_assessment_source_record_id
+        description: Physical delivery identifier selected as the current assessment record.
+        tests:
+          - not_empty_string
+          - not_null:
+              config:
+                where: "current_assessment_id is not null"
+          - relationships:
+              arguments:
+                to: ref('stg_vehicle_assessments')
+                field: source_record_id
+              config:
+                where: "current_assessment_source_record_id is not null"
